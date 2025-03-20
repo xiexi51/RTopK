@@ -17,13 +17,13 @@ inline double getDuration(std::chrono::time_point<std::chrono::system_clock> a,
 using namespace std;
 
 int main() {
-    int N_list[] = {16384, 65536, 262144, 1048576};
-    // int N_list[] = {65536};
-    int dim_origin_list[] = {256, 512, 768};
-    int dim_k_list[] = {16, 32, 64, 96, 128};
-    // int dim_k_list[] = {64, 128, 256, 512};
-    // int max_iter_list[] = {2, 3, 4, 5, 6, 7, 8, 10000};
-    int max_iter_list[] = {10000};
+    // int N_list[] = {16384, 65536, 262144, 1048576};
+    int N_list[] = {65536};
+    int dim_origin_list[] = {8192};
+    // int dim_k_list[] = {16, 32, 64, 96, 128};
+    int dim_k_list[] = {64, 128, 256, 512};
+    int max_iter_list[] = {2, 3, 4, 5, 6, 7, 8, 10000};
+    // int max_iter_list[] = {10000};
     float precision_list[] = {0};
 
     
@@ -50,11 +50,11 @@ int main() {
     
     cout << "data ready, testing..." << endl;
 
-    ofstream fout("output2500.txt");
+    ofstream fout("output3000.txt");
 
     for (int N : N_list){
-        // for (int dim_origin = 128; dim_origin <= 8192; dim_origin += 128){
-        for (int dim_origin : dim_origin_list){
+        for (int dim_origin = 128; dim_origin <= 8192; dim_origin += 128){
+        // for (int dim_origin : dim_origin_list){
             for (int dim_k : dim_k_list){
                 if(dim_k >= dim_origin){
                     continue;
