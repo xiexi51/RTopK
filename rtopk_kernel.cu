@@ -1,4 +1,7 @@
 #include "rtopk_kernel.cuh"
+#include <stdio.h>
+
+// #define EARLY_STOP
 
 template <int WARPS_PER_BLOCK>
 __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int dim_origin, int k, int max_iter, float precision)
@@ -13,13 +16,9 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
 
     const int dim_len = (dim_origin + 31) / 32;
 
-    const int first_idx = blockIdx.x * WARPS_PER_BLOCK * dim_origin;
     #pragma unroll
     for(int ext = 0; ext < dim_len; ext++){
-        int data_idx = wid * dim_origin + laneid + ext * 32;
-        if (data_idx < dim_origin){
-            cache[data_idx] = data[first_idx + data_idx];
-        }
+        cache[wid * dim_origin + laneid + ext * 32] = data[blockIdx.x * WARPS_PER_BLOCK * dim_origin + wid * dim_origin + laneid + ext * 32];
     }
 
     __syncwarp();
@@ -28,15 +27,11 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
 
     #pragma unroll
     for(int j = 0; j < dim_len; j++){
-        int data_idx = wid * dim_origin + laneid  + j * 32;
-        if (data_idx >= dim_origin) {
-            break;
+        if(cache[wid * dim_origin + laneid + j * 32] > max_data){
+            max_data = cache[wid * dim_origin + laneid + j * 32];
         }
-        if(cache[data_idx] > max_data){
-            max_data = cache[data_idx];
-        }
-        if(cache[data_idx] < min_data){
-            min_data = cache[data_idx];
+        if(cache[wid * dim_origin + laneid + j * 32] < min_data){
+            min_data = cache[wid * dim_origin + laneid + j * 32];
         }
     }
 
@@ -57,11 +52,9 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
         count = 0;
         #pragma unroll
         for(int j = 0; j < dim_len; j++){
-            int data_idx = wid * dim_origin + laneid  + j * 32;
-            if (data_idx < dim_origin) {
-                count += cache[data_idx] >= mid_data;
-            }
+            count += cache[wid * dim_origin + laneid + j * 32] >= mid_data;
         }
+
         count += __shfl_down_sync(0xffffffff, count, 16);
         count += __shfl_down_sync(0xffffffff, count, 8);
         count += __shfl_down_sync(0xffffffff, count, 4);
@@ -69,9 +62,11 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
         count += __shfl_down_sync(0xffffffff, count, 1);
         count = __shfl_sync(0xffffffff, count, 0);
 
-        if(i >= max_iter || mid_data <= min_data + precision){
+#ifdef EARLY_STOP
+        if(i >= max_iter){
             break;
         }
+#endif
 
         if(count < k){
             max_data = mid_data;
@@ -81,23 +76,27 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
         }
         else{
             break;
-        }        
-        mid_data = (min_data + max_data) / 2;        
+        }    
+        float new_mid = (min_data + max_data) / 2;
+        if (new_mid <= min_data + precision || abs(mid_data - new_mid) <= precision ){
+            break;
+        }    
+        else{
+            mid_data = new_mid; 
+        } 
     }
 
     int eq_n = k - count; 
     int total_cnt = 0, total_cnt_eq = 0, total_cnt_whole = 0;
+
 
     #pragma unroll
     for(int ext = 0; ext < dim_len; ext++){
         if(total_cnt_whole >= k){
             break;
         }
-        int data_idx = wid * dim_origin + laneid + ext * 32;
-        if (data_idx >= dim_origin) {
-            break;
-        }
-        float val = cache[data_idx];
+        float val = cache[wid * dim_origin + laneid + ext * 32];
+        
         bool choose = val >= mid_data;
 
         bool choose_eq = val >= min_data && val < mid_data;

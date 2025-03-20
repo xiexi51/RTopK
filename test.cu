@@ -3,6 +3,8 @@
 #include <random>
 #include <chrono>
 #include <curand.h>
+#include <algorithm>
+#include <iomanip>
 #include "rtopk_kernel.cuh"
 
 #define timestamp(__var__) auto __var__ = std::chrono::system_clock::now();
@@ -15,9 +17,19 @@ inline double getDuration(std::chrono::time_point<std::chrono::system_clock> a,
 using namespace std;
 
 int main() {
-    int max_N = 1048576;
-    int max_dim_origin = 768;
-    int max_dim_k = 128;
+    int N_list[] = {16384, 65536, 262144, 1048576};
+    // int N_list[] = {65536};
+    int dim_origin_list[] = {256, 512, 768};
+    int dim_k_list[] = {16, 32, 64, 96, 128};
+    // int dim_k_list[] = {64, 128, 256, 512};
+    // int max_iter_list[] = {2, 3, 4, 5, 6, 7, 8, 10000};
+    int max_iter_list[] = {10000};
+    float precision_list[] = {0};
+
+    
+    int max_N = *std::max_element(std::begin(N_list), std::end(N_list));
+    int max_dim_origin = *std::max_element(std::begin(dim_origin_list), std::end(dim_origin_list));
+    int max_dim_k = *std::max_element(std::begin(dim_k_list), std::end(dim_k_list));
 
     cout << "max N = " << max_N << ", preparing data..." << endl;
 
@@ -31,21 +43,17 @@ int main() {
     float *devData;
     cudaMalloc((void **)&devData, max_N * max_dim_origin * sizeof(float));
 
+
     curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetPseudoRandomGeneratorSeed(gen, 1234ULL);
     curandGenerateUniform(gen, devData, max_N * max_dim_origin);
     
     cout << "data ready, testing..." << endl;
 
-    ofstream fout("output100.txt");
-
-    int N_list[] = {65536};
-    int dim_origin_list[] = {256, 512, 768};
-    int dim_k_list[] = {16, 32, 64, 96, 128};
-    int max_iter_list[] = {2, 3, 4, 5, 6, 7, 8, 200};
-    float precision_list[] = {1e-16};
+    ofstream fout("output2500.txt");
 
     for (int N : N_list){
+        // for (int dim_origin = 128; dim_origin <= 8192; dim_origin += 128){
         for (int dim_origin : dim_origin_list){
             for (int dim_k : dim_k_list){
                 if(dim_k >= dim_origin){
