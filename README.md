@@ -48,6 +48,7 @@ Considering the lower-bound speed of RTopK (no early stopping version):
 - CUDA Toolkit (>= 12.0)
 - CMake (>= 3.5)
 - C++ Standard (>= 17)
+- NVIDIA GPU with compute capability ≥ 8.0
 
 ## License
 This project is licensed under the MIT License.
