@@ -19,6 +19,7 @@ using namespace std;
 int main() {
     // int N_list[] = {16384, 65536, 262144, 1048576};
     int N_list[] = {65536};
+    // int dim_origin_list[] = {128,256};
     int dim_origin_list[] = {8192};
     // int dim_k_list[] = {16, 32, 64, 96, 128};
     int dim_k_list[] = {64, 128, 256, 512};
@@ -50,7 +51,7 @@ int main() {
     
     cout << "data ready, testing..." << endl;
 
-    ofstream fout("output3000.txt");
+    ofstream fout("output3300.txt");
 
     for (int N : N_list){
         for (int dim_origin = 128; dim_origin <= 8192; dim_origin += 128){

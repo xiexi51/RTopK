@@ -44,9 +44,11 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
     max_data = __shfl_sync(0xFFFFFFFF, max_data, 0);
     min_data = __shfl_sync(0xFFFFFFFF, min_data, 0);
 
-    float mid_data = max_data;
+    float mid_data = (max_data + min_data) / 2;
 
     int count;
+
+    bool close = false;
 
     for(int i = 0; ; i++){
         count = 0;
@@ -78,7 +80,8 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
             break;
         }    
         float new_mid = (min_data + max_data) / 2;
-        if (new_mid <= min_data + precision || abs(mid_data - new_mid) <= precision ){
+        if (new_mid == max_data || new_mid == min_data || max_data - min_data <= precision ){
+            close = true;
             break;
         }    
         else{
@@ -86,58 +89,55 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
         } 
     }
 
-    int eq_n = k - count; 
-    int total_cnt = 0, total_cnt_eq = 0, total_cnt_whole = 0;
+    int total_cnt = 0;
 
+    float thres = close ? max_data : mid_data;
 
     #pragma unroll
     for(int ext = 0; ext < dim_len; ext++){
-        if(total_cnt_whole >= k){
-            break;
+        if(total_cnt >= k){
+            return;
         }
         float val = cache[wid * dim_origin + laneid + ext * 32];
         
-        bool choose = val >= mid_data;
-
-        bool choose_eq = val >= min_data && val < mid_data;
+        bool choose = val >= thres;
 
         unsigned mask = __ballot_sync(0xffffffff, choose); 
-        unsigned mask_eq = __ballot_sync(0xffffffff, choose_eq);
 
         int lane_cnt = __popc(mask & ((1 << (laneid + 1)) - 1));
-        int lane_cnt_eq = __popc(mask_eq & ((1 << (laneid + 1)) - 1));
 
-        if (total_cnt + lane_cnt > k) {
-            choose = 0;
-        }       
-        if (total_cnt_eq + lane_cnt_eq > eq_n ){
-            choose_eq = 0;
-        }
-
-        mask = __ballot_sync(0xffffffff, choose);
-        mask_eq = __ballot_sync(0xffffffff, choose_eq);
-
-        unsigned mask_whole = mask | mask_eq;
-
-        lane_cnt = __popc(mask & ((1 << (laneid + 1)) - 1));
-        lane_cnt_eq = __popc(mask_eq & ((1 << (laneid + 1)) - 1));
-        int lane_cnt_whole = __popc(mask_whole & ((1 << (laneid + 1)) - 1));
-
-        if(choose || choose_eq){
-            value[blockIdx.x * WARPS_PER_BLOCK * k + wid * k + total_cnt_whole + lane_cnt_whole - 1] = val;
-            index[blockIdx.x * WARPS_PER_BLOCK * k + wid * k + total_cnt_whole + lane_cnt_whole - 1] = laneid + ext * 32;
+        if(choose && total_cnt + lane_cnt <= k ){
+            value[blockIdx.x * WARPS_PER_BLOCK * k + wid * k + total_cnt + lane_cnt - 1] = val;
+            index[blockIdx.x * WARPS_PER_BLOCK * k + wid * k + total_cnt + lane_cnt - 1] = laneid + ext * 32;
         }
 
         total_cnt += lane_cnt;
         total_cnt = __shfl_sync(0xffffffff, total_cnt, 31);
-
-        total_cnt_eq += lane_cnt_eq;
-        total_cnt_eq = __shfl_sync(0xffffffff, total_cnt_eq, 31);
-
-        total_cnt_whole += lane_cnt_whole;
-        total_cnt_whole = __shfl_sync(0xffffffff, total_cnt_whole, 31);
-
     }
+
+
+    #pragma unroll
+    for(int ext = 0; ext < dim_len; ext++){
+        if(total_cnt >= k){
+            return;
+        }
+        float val = cache[wid * dim_origin + laneid + ext * 32];
+        
+        bool choose = ( val >= min_data && val < thres );
+
+        unsigned mask = __ballot_sync(0xffffffff, choose); 
+
+        int lane_cnt = __popc(mask & ((1 << (laneid + 1)) - 1));
+
+        if(choose && total_cnt + lane_cnt <= k ){
+            value[blockIdx.x * WARPS_PER_BLOCK * k + wid * k + total_cnt + lane_cnt - 1] = val;
+            index[blockIdx.x * WARPS_PER_BLOCK * k + wid * k + total_cnt + lane_cnt - 1] = laneid + ext * 32;
+        }
+
+        total_cnt += lane_cnt;
+        total_cnt = __shfl_sync(0xffffffff, total_cnt, 31);
+    }
+
 }
 
 
