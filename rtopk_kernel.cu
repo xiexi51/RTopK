@@ -16,7 +16,6 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
 
     const int dim_len = (dim_origin + 31) / 32;
 
-    #pragma unroll
     for(int ext = 0; ext < dim_len; ext++){
         cache[wid * dim_origin + laneid + ext * 32] = data[blockIdx.x * WARPS_PER_BLOCK * dim_origin + wid * dim_origin + laneid + ext * 32];
     }
@@ -25,7 +24,6 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
 
     float max_data = -99999, min_data = 99999;
 
-    #pragma unroll
     for(int j = 0; j < dim_len; j++){
         if(cache[wid * dim_origin + laneid + j * 32] > max_data){
             max_data = cache[wid * dim_origin + laneid + j * 32];
@@ -52,7 +50,6 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
 
     for(int i = 0; ; i++){
         count = 0;
-        #pragma unroll
         for(int j = 0; j < dim_len; j++){
             count += cache[wid * dim_origin + laneid + j * 32] >= mid_data;
         }
@@ -93,7 +90,6 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
 
     float thres = close ? max_data : mid_data;
 
-    #pragma unroll
     for(int ext = 0; ext < dim_len; ext++){
         if(total_cnt >= k){
             return;
@@ -116,7 +112,6 @@ __global__ void rtopk_kernel(float *data, float *value, int *index, int N, int d
     }
 
 
-    #pragma unroll
     for(int ext = 0; ext < dim_len; ext++){
         if(total_cnt >= k){
             return;
